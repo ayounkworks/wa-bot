@@ -8,9 +8,12 @@
  * @returns {string}
  */
 function buildList(header, items, newName) {
-  const nextNumber = items.length > 0
-    ? Math.max(...items.map(i => i.number)) + 1
-    : 1;
+  const maxNumber = items.length > 0 ? Math.max(...items.map(i => i.number)) : 0;
+
+  // Cari slot kosong pertama (item yang tidak ada namanya)
+  const emptySlot = items.find(i => !i.name);
+  const targetNumber = emptySlot ? emptySlot.number : maxNumber + 1;
+  const totalSlots = Math.max(maxNumber, targetNumber);
 
   const lines = [];
 
@@ -20,13 +23,14 @@ function buildList(header, items, newName) {
     lines.push(''); // baris kosong setelah header
   }
 
-  // Tulis ulang semua item lama
-  for (const item of items) {
-    lines.push(`${item.number}. ${item.name}`);
+  for (let n = 1; n <= totalSlots; n++) {
+    if (n === targetNumber) {
+      lines.push(`${n}. ${newName}`);
+    } else {
+      const existing = items.find(i => i.number === n);
+      lines.push(existing && existing.name ? `${n}. ${existing.name}` : `${n}.`);
+    }
   }
-
-  // Tambah nama baru
-  lines.push(`${nextNumber}. ${newName}`);
 
   return lines.join('\n');
 }

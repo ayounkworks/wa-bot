@@ -34,7 +34,7 @@ async function handleList(sock, msg, groupName) {
 
   // ── 5. Parse list ───────────────────────────────────────────────────
   const { header, items } = parseList(text);
-  if (items.length === 0) {
+  if (!items.some(i => i.name)) {
     logger.warn('[SKIP] Tidak ada item list ditemukan.');
     return;
   }
@@ -43,7 +43,7 @@ async function handleList(sock, msg, groupName) {
   markProcessed(msgId);
 
   // ── 6. Cek semua nama, kumpulkan yang belum ada ─────────────────────
-  const existingNames = items.map(i => i.name);
+  const existingNames = items.map(i => i.name).filter(Boolean);
   const namesToAdd = [];
 
   for (const name of config.myNames) {
@@ -63,37 +63,14 @@ async function handleList(sock, msg, groupName) {
   // ── 7. Tambahkan semua nama yang belum ada ──────────────────────────
   let currentItems = [...items];
   let currentHeader = header;
+  let outputText = '';
 
   for (const name of namesToAdd) {
-    const newText = buildList(currentHeader, currentItems, name);
-    // Parse ulang untuk update nomor urut
-    const reparsed = require('../utils/parser').parseList(newText);
+    outputText = buildList(currentHeader, currentItems, name);
+    // Parse ulang agar nama berikutnya mengisi slot kosong selanjutnya
+    const reparsed = parseList(outputText);
     currentHeader = reparsed.header;
     currentItems = reparsed.items;
-  }
-
-  const finalText = buildList(currentHeader, items, namesToAdd[0]);
-
-  // Kalau lebih dari 1 nama, build manual
-  let outputText;
-  if (namesToAdd.length === 1) {
-    outputText = buildList(header, items, namesToAdd[0]);
-  } else {
-    // Tambah semua nama satu per satu
-    let workItems = [...items];
-    for (const name of namesToAdd) {
-      const nextNum = Math.max(...workItems.map(i => i.number)) + 1;
-      workItems.push({ number: nextNum, name });
-    }
-    const lines = [];
-    if (header && header.trim()) {
-      lines.push(header.trim());
-      lines.push('');
-    }
-    for (const item of workItems) {
-      lines.push(`${item.number}. ${item.name}`);
-    }
-    outputText = lines.join('\n');
   }
 
   logger.info('[GENERATE]\n' + outputText);

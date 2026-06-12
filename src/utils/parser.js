@@ -16,7 +16,7 @@ function parseList(text) {
 
   // Regex: nomor di awal baris, diikuti pemisah opsional, lalu nama
   // Menangani: "1. Nama", "1) Nama", "1 - Nama", "1. NAMA", "10. Nama Panjang"
-  const itemRegex = /^(\d+)\s*[.\-)\s]\s*(.+)$/;
+  const itemRegex = /^(\d+)\s*[.\-)\s]*(.*)$/;
 
   for (const line of lines) {
     const match = line.match(itemRegex);
@@ -24,9 +24,7 @@ function parseList(text) {
       foundFirstItem = true;
       const num = parseInt(match[1], 10);
       const name = match[2].trim();
-      if (name.length > 0) {
-        items.push({ number: num, name });
-      }
+      items.push({ number: num, name });
     } else if (!foundFirstItem) {
       // Baris sebelum item pertama = header
       headerLines.push(line);
