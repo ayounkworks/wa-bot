@@ -2,8 +2,7 @@
 
 const path = require('path');
 
-// Validasi env wajib
-const required = ['MY_NAME', 'TARGET_GROUP'];
+const required = ['MY_NAMES', 'TARGET_GROUPS'];
 for (const key of required) {
   if (!process.env[key]) {
     console.error(`[CONFIG] ERROR: env variable ${key} wajib diisi!`);
@@ -11,15 +10,27 @@ for (const key of required) {
   }
 }
 
-const rawKeywords = process.env.KEYWORDS || 'list kerja,kerja malam,list malam,lembur';
+// Support multi nama: "Nurul,Umar,Abi"
+const myNames = process.env.MY_NAMES
+  .split(',')
+  .map(n => n.trim())
+  .filter(Boolean);
+
+// Support multi grup: "Grup A,Grup B"
+const targetGroups = process.env.TARGET_GROUPS
+  .split(',')
+  .map(g => g.trim())
+  .filter(Boolean);
+
+const rawKeywords = process.env.KEYWORDS || 'list kerja,kerja malam,list malam,lembur,list';
 const keywords = rawKeywords
   .split(',')
   .map(k => k.trim().toLowerCase())
   .filter(Boolean);
 
 module.exports = {
-  myName: process.env.MY_NAME.trim(),
-  targetGroup: process.env.TARGET_GROUP.trim(),
+  myNames,        // array nama
+  targetGroups,   // array grup
   keywords,
   delayMin: parseInt(process.env.DELAY_MIN || '2000', 10),
   delayMax: parseInt(process.env.DELAY_MAX || '5000', 10),

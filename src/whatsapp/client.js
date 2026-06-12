@@ -15,16 +15,13 @@ const config = require('../config/config');
 const logger = require('../utils/logger');
 const { onMessages } = require('../handlers/messageHandler');
 
-// Pastikan folder session ada
 if (!fs.existsSync(config.paths.session)) {
   fs.mkdirSync(config.paths.session, { recursive: true });
 }
 
-// Cache metadata grup secara manual
 const groupMetaCache = new Map();
-
 let retryCount = 0;
-const MAX_RETRY = 10;
+const MAX_RETRY = 999; // retry terus, tidak berhenti
 const BASE_DELAY_MS = 3000;
 
 async function startClient() {
@@ -47,8 +44,7 @@ async function startClient() {
   sock.ev.on('groups.update', (updates) => {
     for (const update of updates) {
       if (groupMetaCache.has(update.id)) {
-        const existing = groupMetaCache.get(update.id);
-        groupMetaCache.set(update.id, { ...existing, ...update });
+        groupMetaCache.set(update.id, { ...groupMetaCache.get(update.id), ...update });
       }
     }
   });
@@ -57,7 +53,6 @@ async function startClient() {
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      // Generate link QR yang bisa dibuka di browser
       const encoded = encodeURIComponent(qr);
       const link = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encoded}`;
       logger.info('=== SCAN QR CODE ===');
@@ -75,22 +70,21 @@ async function startClient() {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
       logger.warn(`Koneksi terputus. Kode: ${reason}`);
 
-      const shouldReconnect =
-        reason !== DisconnectReason.loggedOut &&
-        reason !== DisconnectReason.forbidden;
-
-      if (shouldReconnect) {
-        if (retryCount >= MAX_RETRY) {
-          logger.error(`Gagal reconnect setelah ${MAX_RETRY} percobaan. Restart manual diperlukan.`);
-          return;
-        }
+      if (reason === DisconnectReason.loggedOut) {
+        // Hapus session lama lalu buat QR baru
+        logger.warn('Session logout. Menghapus session dan membuat QR baru...');
+        try {
+          fs.rmSync(config.paths.session, { recursive: true, force: true });
+          fs.mkdirSync(config.paths.session, { recursive: true });
+        } catch (e) {}
+        retryCount = 0;
+        setTimeout(startClient, 2000);
+      } else {
+        // Koneksi putus biasa, reconnect dengan backoff
         retryCount++;
         const delay = Math.min(BASE_DELAY_MS * Math.pow(2, retryCount - 1), 60_000);
-        logger.info(`Mencoba reconnect ke-${retryCount} dalam ${delay / 1000}s...`);
+        logger.info(`Reconnect ke-${retryCount} dalam ${delay / 1000}s...`);
         setTimeout(startClient, delay);
-      } else {
-        logger.error('Session dihapus atau diblokir. Hapus folder data/session dan restart.');
-        process.exit(1);
       }
     }
   });
