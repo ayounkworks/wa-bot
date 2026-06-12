@@ -32,6 +32,13 @@ async function handleList(sock, msg, groupName) {
   const hasKeyword = config.keywords.some(kw => textLower.includes(kw));
   if (!hasKeyword) return;
 
+  // ── Cek exclude keyword (list tambahan, dll) ────────────────────────
+  const hasExcludeKeyword = config.excludeKeywords.some(kw => textLower.includes(kw));
+  if (hasExcludeKeyword) {
+    logger.info('[SKIP] Pesan mengandung exclude keyword (list tambahan).');
+    return;
+  }
+
   // ── 5. Parse list ───────────────────────────────────────────────────
   const { header, items } = parseList(text);
   if (!items.some(i => i.name)) {

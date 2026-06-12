@@ -28,11 +28,18 @@ const keywords = rawKeywords
   .map(k => k.trim().toLowerCase())
   .filter(Boolean);
 
+const rawExcludeKeywords = process.env.EXCLUDE_KEYWORDS || 'tambahan ini ya maksimalkan';
+const excludeKeywords = rawExcludeKeywords
+  .split(',')
+  .map(k => k.trim().toLowerCase())
+  .filter(Boolean);
+
 module.exports = {
   myNames,        // array nama
   targetGroups,   // array grup
   keywords,
   delayMin: parseInt(process.env.DELAY_MIN || '2000', 10),
+  excludeKeywords,
   delayMax: parseInt(process.env.DELAY_MAX || '5000', 10),
   fuzzyThreshold: parseFloat(process.env.FUZZY_THRESHOLD || '0.75'),
   paths: {
