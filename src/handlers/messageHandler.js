@@ -18,6 +18,8 @@ async function getGroupName(sock, jid) {
     const meta = await sock.groupMetadata(jid);
     const name = meta.subject || jid;
     groupNameCache.set(jid, name);
+    // Update cache setiap 30 menit agar tidak stale
+    setTimeout(() => groupNameCache.delete(jid), 30 * 60 * 1000);
     return name;
   } catch (err) {
     logger.warn(`Gagal ambil metadata grup ${jid}: ${err.message}`);
