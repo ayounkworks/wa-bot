@@ -7,43 +7,20 @@ const { isDuplicate } = require('../utils/fuzzy');
 const { isProcessed, markProcessed } = require('../utils/store');
 const logger = require('../utils/logger');
 
-/**
- * Delay acak antara min dan max (ms)
- */
-function randomDelay(min, max) {
-  const ms = min + Math.floor(Math.random() * (max - min));
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Proses pesan masuk.
- * @param {object} sock - Baileys socket
- * @param {object} msg - Objek pesan dari Baileys
- * @param {string} groupName - Nama grup asal pesan
- */
 async function handleList(sock, msg, groupName) {
   const msgId = msg.key.id;
-  const sender = msg.key.participant || msg.key.remoteJid;
   const chatJid = msg.key.remoteJid;
 
   // ── 1. Anti duplikat pesan ──────────────────────────────────────────
   if (isProcessed(msgId)) {
-    logger.info(`[SKIP] Pesan ${msgId} sudah diproses sebelumnya.`);
+    logger.info(`[SKIP] Pesan ${msgId} sudah diproses.`);
     return;
   }
 
   // ── 2. Cek grup target ──────────────────────────────────────────────
-  if (groupName !== config.targetGroup) {
-    return; // Bukan grup target, abaikan diam-diam
-  }
+  if (groupName !== config.targetGroup) return;
 
-  // ── 3. Cek pengirim = atasan ────────────────────────────────────────
-  const senderClean = sender.replace(/@.+/, '') + '@s.whatsapp.net';
-  if (senderClean !== config.bossNumber) {
-    return; // Bukan atasan, abaikan
-  }
-
-  // ── 4. Ambil teks pesan ─────────────────────────────────────────────
+  // ── 3. Ambil teks pesan ─────────────────────────────────────────────
   const text = (
     msg.message?.conversation ||
     msg.message?.extendedTextMessage?.text ||
@@ -52,54 +29,48 @@ async function handleList(sock, msg, groupName) {
 
   if (!text) return;
 
-  // ── 5. Cek keyword ──────────────────────────────────────────────────
+  // ── 4. Cek keyword ──────────────────────────────────────────────────
   const textLower = text.toLowerCase();
   const hasKeyword = config.keywords.some(kw => textLower.includes(kw));
   if (!hasKeyword) return;
 
   // ── Mulai proses ────────────────────────────────────────────────────
-  logger.info(`[PROSES] Pesan dari atasan di grup "${groupName}"`);
-  logger.info(`[TEKS] ${text.substring(0, 100)}...`);
+  logger.info(`[PROSES] Pesan di grup "${groupName}"`);
 
-  // Tandai segera (sebelum kirim) agar tidak double proses meski error
   markProcessed(msgId);
 
-  // ── 6. Parse list ───────────────────────────────────────────────────
+  // ── 5. Parse list ───────────────────────────────────────────────────
   const { header, items } = parseList(text);
 
   if (items.length === 0) {
-    logger.warn('[SKIP] Tidak ditemukan item list dalam pesan.');
+    logger.warn('[SKIP] Tidak ada item list ditemukan.');
     return;
   }
 
-  logger.info(`[PARSE] Header: "${header}" | ${items.length} item ditemukan`);
+  logger.info(`[PARSE] Header: "${header}" | ${items.length} item`);
 
-  // ── 7. Cek duplikat nama ────────────────────────────────────────────
+  // ── 6. Cek duplikat nama ────────────────────────────────────────────
   const names = items.map(i => i.name);
   const dupCheck = isDuplicate(config.myName, names, config.fuzzyThreshold);
 
   if (dupCheck.found) {
-    logger.info(
-      `[SKIP] Nama "${config.myName}" sudah ada (cocok dengan "${dupCheck.matchedName}", skor: ${dupCheck.score.toFixed(2)})`
-    );
+    logger.info(`[SKIP] Nama "${config.myName}" sudah ada (cocok: "${dupCheck.matchedName}")`);
     return;
   }
 
-  // ── 8. Build list baru ──────────────────────────────────────────────
+  // ── 7. Build & kirim ────────────────────────────────────────────────
   const newText = buildList(header, items, config.myName);
-  logger.info('[GENERATE] List baru:\n' + newText);
+  logger.info('[GENERATE]\n' + newText);
 
-  // ── 9. Delay acak ───────────────────────────────────────────────────
   const delayMs = config.delayMin + Math.floor(Math.random() * (config.delayMax - config.delayMin));
-  logger.info(`[DELAY] Menunggu ${delayMs}ms sebelum kirim...`);
-  await randomDelay(config.delayMin, config.delayMax);
+  logger.info(`[DELAY] ${delayMs}ms...`);
+  await new Promise(r => setTimeout(r, delayMs));
 
-  // ── 10. Kirim ke grup ───────────────────────────────────────────────
   try {
     await sock.sendMessage(chatJid, { text: newText });
-    logger.info(`[OK] List berhasil dikirim ke grup "${groupName}"`);
+    logger.info('[OK] Berhasil dikirim.');
   } catch (err) {
-    logger.error('[ERROR] Gagal kirim pesan:', err.message);
+    logger.error('[ERROR] Gagal kirim:', err.message);
   }
 }
 
