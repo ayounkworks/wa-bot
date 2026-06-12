@@ -10,7 +10,6 @@ const {
 const { Boom } = require('@hapi/boom');
 const pino = require('pino');
 const fs = require('fs');
-const qrcode = require('qrcode-terminal');
 
 const config = require('../config/config');
 const logger = require('../utils/logger');
@@ -45,7 +44,6 @@ async function startClient() {
     cachedGroupMetadata: async (jid) => groupMetaCache.get(jid),
   });
 
-  // Update cache saat ada perubahan grup
   sock.ev.on('groups.update', (updates) => {
     for (const update of updates) {
       if (groupMetaCache.has(update.id)) {
@@ -55,15 +53,17 @@ async function startClient() {
     }
   });
 
-  // ── Event: credentials diperbarui ───────────────────────────────────
   sock.ev.on('creds.update', saveCreds);
 
-  // ── Event: status koneksi ───────────────────────────────────────────
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      logger.info('========== SCAN QR CODE DI BAWAH INI ==========');
-      qrcode.generate(qr, { small: true });
-      logger.info('================================================');
+      // Generate link QR yang bisa dibuka di browser
+      const encoded = encodeURIComponent(qr);
+      const link = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encoded}`;
+      logger.info('=== SCAN QR CODE ===');
+      logger.info('Buka link ini di browser lalu scan dengan WhatsApp:');
+      logger.info(link);
+      logger.info('===================');
     }
 
     if (connection === 'open') {
@@ -95,7 +95,6 @@ async function startClient() {
     }
   });
 
-  // ── Event: pesan masuk ──────────────────────────────────────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
     await onMessages(sock, messages);
