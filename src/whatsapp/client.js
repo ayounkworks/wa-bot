@@ -5,7 +5,6 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  makeInMemoryStore,
   Browsers,
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
@@ -21,10 +20,8 @@ if (!fs.existsSync(config.paths.session)) {
   fs.mkdirSync(config.paths.session, { recursive: true });
 }
 
-// In-memory store untuk metadata grup (diperlukan groupMetadata())
-const store = makeInMemoryStore({
-  logger: pino({ level: 'silent' }),
-});
+// Cache metadata grup secara manual (pengganti makeInMemoryStore)
+const groupMetaCache = new Map();
 
 let retryCount = 0;
 const MAX_RETRY = 10;
@@ -39,16 +36,24 @@ async function startClient() {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }), // Matikan log Baileys internal
+    logger: pino({ level: 'silent' }),
     printQRInTerminal: true,
     browser: Browsers.ubuntu('Chrome'),
     syncFullHistory: false,
-    markOnlineOnConnect: false, // Jangan tampak online terus
+    markOnlineOnConnect: false,
     defaultQueryTimeoutMs: 30_000,
+    cachedGroupMetadata: async (jid) => groupMetaCache.get(jid),
   });
 
-  // Bind store ke socket agar bisa query metadata grup
-  store.bind(sock.ev);
+  // Update cache saat ada perubahan grup
+  sock.ev.on('groups.update', (updates) => {
+    for (const update of updates) {
+      if (groupMetaCache.has(update.id)) {
+        const existing = groupMetaCache.get(update.id);
+        groupMetaCache.set(update.id, { ...existing, ...update });
+      }
+    }
+  });
 
   // ── Event: credentials diperbarui ───────────────────────────────────
   sock.ev.on('creds.update', saveCreds);
