@@ -10,6 +10,7 @@ const {
 const { Boom } = require('@hapi/boom');
 const pino = require('pino');
 const fs = require('fs');
+const qrcode = require('qrcode-terminal');
 
 const config = require('../config/config');
 const logger = require('../utils/logger');
@@ -20,7 +21,7 @@ if (!fs.existsSync(config.paths.session)) {
   fs.mkdirSync(config.paths.session, { recursive: true });
 }
 
-// Cache metadata grup secara manual (pengganti makeInMemoryStore)
+// Cache metadata grup secara manual
 const groupMetaCache = new Map();
 
 let retryCount = 0;
@@ -37,7 +38,6 @@ async function startClient() {
     version,
     auth: state,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: true,
     browser: Browsers.ubuntu('Chrome'),
     syncFullHistory: false,
     markOnlineOnConnect: false,
@@ -61,7 +61,9 @@ async function startClient() {
   // ── Event: status koneksi ───────────────────────────────────────────
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      logger.info('QR Code muncul di terminal. Scan dengan WhatsApp!');
+      logger.info('========== SCAN QR CODE DI BAWAH INI ==========');
+      qrcode.generate(qr, { small: true });
+      logger.info('================================================');
     }
 
     if (connection === 'open') {
@@ -82,9 +84,7 @@ async function startClient() {
           logger.error(`Gagal reconnect setelah ${MAX_RETRY} percobaan. Restart manual diperlukan.`);
           return;
         }
-
         retryCount++;
-        // Exponential backoff: 3s, 6s, 12s, 24s, ...
         const delay = Math.min(BASE_DELAY_MS * Math.pow(2, retryCount - 1), 60_000);
         logger.info(`Mencoba reconnect ke-${retryCount} dalam ${delay / 1000}s...`);
         setTimeout(startClient, delay);
@@ -97,7 +97,6 @@ async function startClient() {
 
   // ── Event: pesan masuk ──────────────────────────────────────────────
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    // Hanya proses pesan baru (bukan history sync)
     if (type !== 'notify') return;
     await onMessages(sock, messages);
   });
