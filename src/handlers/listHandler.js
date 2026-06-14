@@ -41,7 +41,9 @@ async function handleList(sock, msg, groupName) {
 
   // ── 5. Parse list ───────────────────────────────────────────────────
   const { header, items } = parseList(text);
-  if (!items.some(i => i.name)) {
+
+  // FIX: cukup cek ada item (walau kosong), tidak perlu ada nama dulu
+  if (items.length === 0) {
     logger.warn('[SKIP] Tidak ada item list ditemukan.');
     return;
   }
