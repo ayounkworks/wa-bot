@@ -14,11 +14,20 @@ async function handleList(sock, msg, groupName) {
   // ── 1. Anti duplikat pesan ──────────────────────────────────────────
   if (isProcessed(msgId)) return;
 
-  // ── 2. Cek grup target (support multi grup) ─────────────────────────
+  // ── 2. Cek grup target ──────────────────────────────────────────────
   const isTargetGroup = config.targetGroups.some(g => g === groupName);
   if (!isTargetGroup) return;
 
-  // ── 3. Ambil teks pesan ─────────────────────────────────────────────
+  // ── 3. Cek pengirim harus atasan ───────────────────────────────────
+  const senderJid = msg.key.participant || msg.key.remoteJid;
+  const senderNumber = senderJid.replace(/[^0-9]/g, '');
+  const isBoss = config.bossNumbers.some(n => senderNumber.includes(n) || n.includes(senderNumber));
+  if (!isBoss) {
+    logger.info(`[SKIP] Bukan dari atasan: ${senderNumber}`);
+    return;
+  }
+
+  // ── 4. Ambil teks pesan ─────────────────────────────────────────────
   const text = (
     msg.message?.conversation ||
     msg.message?.extendedTextMessage?.text ||
@@ -27,31 +36,31 @@ async function handleList(sock, msg, groupName) {
 
   if (!text) return;
 
-  // ── 4. Cek keyword ──────────────────────────────────────────────────
+  // ── 5. Cek keyword ──────────────────────────────────────────────────
   const textLower = text.toLowerCase();
   const hasKeyword = config.keywords.some(kw => textLower.includes(kw));
   if (!hasKeyword) return;
 
-  // ── Cek exclude keyword (list tambahan, dll) ────────────────────────
+  // ── Cek exclude keyword ─────────────────────────────────────────────
   const hasExcludeKeyword = config.excludeKeywords.some(kw => textLower.includes(kw));
   if (hasExcludeKeyword) {
-    logger.info('[SKIP] Pesan mengandung exclude keyword (list tambahan).');
+    logger.info('[SKIP] Pesan mengandung exclude keyword.');
     return;
   }
 
-  // ── 5. Parse list ───────────────────────────────────────────────────
+  // ── 6. Parse list ───────────────────────────────────────────────────
   const { header, items } = parseList(text);
 
-  // FIX: cukup cek ada item (walau kosong), tidak perlu ada nama dulu
+  // Cukup cek ada item (walau kosong)
   if (items.length === 0) {
     logger.warn('[SKIP] Tidak ada item list ditemukan.');
     return;
   }
 
-  logger.info(`[PROSES] Grup: "${groupName}" | ${items.length} item`);
+  logger.info(`[PROSES] Grup: "${groupName}" | Atasan: ${senderNumber} | ${items.length} item`);
   markProcessed(msgId);
 
-  // ── 6. Cek semua nama, kumpulkan yang belum ada ─────────────────────
+  // ── 7. Cek semua nama, kumpulkan yang belum ada ─────────────────────
   const existingNames = items.map(i => i.name).filter(Boolean);
   const namesToAdd = [];
 
@@ -69,14 +78,13 @@ async function handleList(sock, msg, groupName) {
     return;
   }
 
-  // ── 7. Tambahkan semua nama yang belum ada ──────────────────────────
+  // ── 8. Tambahkan semua nama yang belum ada ──────────────────────────
   let currentItems = [...items];
   let currentHeader = header;
   let outputText = '';
 
   for (const name of namesToAdd) {
     outputText = buildList(currentHeader, currentItems, name);
-    // Parse ulang agar nama berikutnya mengisi slot kosong selanjutnya
     const reparsed = parseList(outputText);
     currentHeader = reparsed.header;
     currentItems = reparsed.items;
@@ -84,10 +92,7 @@ async function handleList(sock, msg, groupName) {
 
   logger.info('[GENERATE]\n' + outputText);
 
-  // ── 8. Delay & kirim ───────────────────────────────────────────────
-  const delayMs = config.delayMin + Math.floor(Math.random() * (config.delayMax - config.delayMin));
-  await new Promise(r => setTimeout(r, delayMs));
-
+  // ── 9. Langsung kirim tanpa delay ──────────────────────────────────
   try {
     await sock.sendMessage(chatJid, { text: outputText });
     logger.info(`[OK] Berhasil kirim ${namesToAdd.length} nama: ${namesToAdd.join(', ')}`);
