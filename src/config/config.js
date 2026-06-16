@@ -2,7 +2,7 @@
 
 const path = require('path');
 
-const required = ['MY_NAMES', 'TARGET_GROUPS'];
+const required = ['MY_NAMES', 'TARGET_GROUPS', 'BOSS_NUMBERS'];
 for (const key of required) {
   if (!process.env[key]) {
     console.error(`[CONFIG] ERROR: env variable ${key} wajib diisi!`);
@@ -22,6 +22,12 @@ const targetGroups = process.env.TARGET_GROUPS
   .map(g => g.trim())
   .filter(Boolean);
 
+// Support multi atasan: "628xxx,628yyy"
+const bossNumbers = process.env.BOSS_NUMBERS
+  .split(',')
+  .map(n => n.trim().replace(/[^0-9]/g, '')) // hapus karakter non-angka
+  .filter(Boolean);
+
 const rawKeywords = process.env.KEYWORDS || 'list kerja,kerja malam,list malam,lembur,list';
 const keywords = rawKeywords
   .split(',')
@@ -35,11 +41,12 @@ const excludeKeywords = rawExcludeKeywords
   .filter(Boolean);
 
 module.exports = {
-  myNames,        // array nama
-  targetGroups,   // array grup
+  myNames,
+  targetGroups,
+  bossNumbers,
   keywords,
-  delayMin: parseInt(process.env.DELAY_MIN || '2000', 10),
   excludeKeywords,
+  delayMin: parseInt(process.env.DELAY_MIN || '2000', 10),
   delayMax: parseInt(process.env.DELAY_MAX || '5000', 10),
   fuzzyThreshold: parseFloat(process.env.FUZZY_THRESHOLD || '0.75'),
   paths: {
